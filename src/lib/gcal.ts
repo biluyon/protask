@@ -117,7 +117,7 @@ async function ensureToken(): Promise<boolean> {
 }
 
 let gisLoading: Promise<void> | null = null
-function loadGis(): Promise<void> {
+export function loadGis(): Promise<void> {
   if (window.google?.accounts) return Promise.resolve()
   if (gisLoading) return gisLoading
   gisLoading = new Promise((resolve, reject) => {

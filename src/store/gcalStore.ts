@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import {
   connect as gcalConnect, disconnect as gcalDisconnect, fetchCalendars, fetchEventsRange,
   rescheduleEvent, createEvent as gcalCreate, updateEvent as gcalUpdate, deleteEvent as gcalDelete,
-  eventDays, gcalEnabled, hasValidToken, type GcalCalendar, type GcalEvent, type EventTiming,
+  eventDays, gcalEnabled, hasValidToken, loadGis, type GcalCalendar, type GcalEvent, type EventTiming,
 } from '../lib/gcal'
 
 /** YYYY-MM-DD에 n일 (정오 기준 tz 경계 회피) — 종일 end 배타 변환용 */
@@ -75,6 +75,7 @@ export const useGcal = create<GcalStore>((set, get) => ({
   init: async () => {
     if (!gcalEnabled || initOnce) return
     initOnce = true
+    void loadGis() // Settings 페이지 마운트 시 GIS를 미리 로드해 연결 버튼 클릭이 곧바로 팝업을 열게 함
     if (!hasValidToken()) {
       set({ status: 'disconnected' })
       return
