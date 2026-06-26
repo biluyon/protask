@@ -164,7 +164,7 @@ function handleCodeResponse(resp: { code?: string; error?: string }) {
       const r = await fetch(TOKEN_API, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'exchange', code: resp.code }),
+        body: JSON.stringify({ action: 'exchange', code: resp.code, redirect_uri: window.location.origin }),
       })
       if (!r.ok) return
       const d = (await r.json()) as { access_token: string; expires_in: number; refresh_token: string | null }

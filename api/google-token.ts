@@ -25,12 +25,12 @@ export default async function handler(req: any, res: any) {
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET
   if (!clientId || !clientSecret) return res.status(500).json({ error: 'server_env_missing' })
 
-  const { action, code, refresh_token } = (req.body ?? {}) as { action?: string; code?: string; refresh_token?: string }
+  const { action, code, refresh_token, redirect_uri } = (req.body ?? {}) as { action?: string; code?: string; refresh_token?: string; redirect_uri?: string }
   const params = new URLSearchParams({ client_id: clientId, client_secret: clientSecret })
   if (action === 'exchange' && code) {
     params.set('grant_type', 'authorization_code')
     params.set('code', code)
-    params.set('redirect_uri', 'postmessage') // GIS popup code flow
+    params.set('redirect_uri', redirect_uri ?? 'postmessage')
   } else if (action === 'refresh' && refresh_token) {
     params.set('grant_type', 'refresh_token')
     params.set('refresh_token', refresh_token)
