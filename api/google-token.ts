@@ -30,7 +30,7 @@ export default async function handler(req: any, res: any) {
   if (action === 'exchange' && code) {
     params.set('grant_type', 'authorization_code')
     params.set('code', code)
-    params.set('redirect_uri', redirect_uri ?? 'postmessage')
+    params.set('redirect_uri', redirect_uri || origin || 'postmessage')
   } else if (action === 'refresh' && refresh_token) {
     params.set('grant_type', 'refresh_token')
     params.set('refresh_token', refresh_token)
