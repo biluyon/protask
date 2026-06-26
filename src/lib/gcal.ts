@@ -49,7 +49,9 @@ declare global {
           initCodeClient: (cfg: {
             client_id: string
             scope: string
-            ux_mode: 'popup'
+            ux_mode: 'popup' | 'redirect'
+            redirect_uri?: string
+            state?: string
             callback: (resp: { code?: string; error?: string }) => void
           }) => { requestCode: () => void }
         }
@@ -117,18 +119,63 @@ async function ensureToken(): Promise<boolean> {
 }
 
 let gisLoading: Promise<void> | null = null
+let codeClient: { requestCode: () => void } | null = null
+let connectSuccessHandler: (() => void) | null = null
+
 export function loadGis(): Promise<void> {
-  if (window.google?.accounts) return Promise.resolve()
+  if (window.google?.accounts) {
+    initRedirectClient()
+    return Promise.resolve()
+  }
   if (gisLoading) return gisLoading
   gisLoading = new Promise((resolve, reject) => {
     const s = document.createElement('script')
     s.src = 'https://accounts.google.com/gsi/client'
     s.async = true
-    s.onload = () => resolve()
+    s.onload = () => {
+      initRedirectClient()
+      resolve()
+    }
     s.onerror = () => reject(new Error('GIS load failed'))
     document.head.appendChild(s)
   })
   return gisLoading
+}
+
+export function setConnectSuccessHandler(handler: () => void) {
+  connectSuccessHandler = handler
+}
+
+function initRedirectClient() {
+  if (!gcalEnabled || !window.google?.accounts || codeClient) return
+  codeClient = window.google.accounts.oauth2.initCodeClient({
+    client_id: GCAL_CLIENT_ID,
+    scope: 'https://www.googleapis.com/auth/calendar',
+    ux_mode: 'redirect',
+    redirect_uri: window.location.origin,
+    callback: handleCodeResponse,
+  })
+}
+
+function handleCodeResponse(resp: { code?: string; error?: string }) {
+  if (resp.error || !resp.code) return
+  void (async () => {
+    try {
+      const r = await fetch(TOKEN_API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'exchange', code: resp.code }),
+      })
+      if (!r.ok) return
+      const d = (await r.json()) as { access_token: string; expires_in: number; refresh_token: string | null }
+      saveAuth({
+        token: d.access_token,
+        expiresAt: Date.now() + d.expires_in * 1000,
+        refreshToken: d.refresh_token ?? auth?.refreshToken ?? null,
+      })
+      connectSuccessHandler?.()
+    } catch { /* ignore */ }
+  })()
 }
 
 /** 인증 보유 여부 — 유효 토큰 또는 refresh token */
@@ -136,38 +183,18 @@ export function hasValidToken(): boolean {
   return !!auth && (auth.expiresAt > Date.now() + 60_000 || !!auth.refreshToken)
 }
 
-/** 사용자 제스처에서 호출 (1회 동의 팝업) → code 교환으로 refresh token 확보 */
-export async function connect(): Promise<boolean> {
+export function connect(): boolean {
   if (!gcalEnabled) return false
-  await loadGis()
-  const code = await new Promise<string | null>(resolve => {
-    const client = window.google!.accounts.oauth2.initCodeClient({
-      client_id: GCAL_CLIENT_ID,
-      // calendar(read/write): 조회 + Protask에서 옮긴 일정 쓰기(reschedule)
-      scope: 'https://www.googleapis.com/auth/calendar',
-      ux_mode: 'popup',
-      callback: resp => resolve(resp.code ?? null),
-    })
-    client.requestCode()
-  })
-  if (!code) return false
-  try {
-    const r = await fetch(TOKEN_API, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'exchange', code }),
-    })
-    if (!r.ok) return false
-    const d = (await r.json()) as { access_token: string; expires_in: number; refresh_token: string | null }
-    saveAuth({
-      token: d.access_token,
-      expiresAt: Date.now() + d.expires_in * 1000,
-      refreshToken: d.refresh_token ?? auth?.refreshToken ?? null, // 재동의 시 누락되면 기존 것 유지
+  if (!window.google?.accounts) {
+    void loadGis().then(() => {
+      initRedirectClient()
+      codeClient?.requestCode()
     })
     return true
-  } catch {
-    return false
   }
+  initRedirectClient()
+  codeClient?.requestCode()
+  return true
 }
 
 export function disconnect() {
