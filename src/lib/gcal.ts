@@ -151,8 +151,7 @@ function initRedirectClient() {
   codeClient = window.google.accounts.oauth2.initCodeClient({
     client_id: GCAL_CLIENT_ID,
     scope: 'https://www.googleapis.com/auth/calendar',
-    ux_mode: 'redirect',
-    redirect_uri: window.location.origin,
+    ux_mode: 'popup',
     callback: handleCodeResponse,
   })
 }
@@ -164,9 +163,15 @@ function handleCodeResponse(resp: { code?: string; error?: string }) {
       const r = await fetch(TOKEN_API, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'exchange', code: resp.code, redirect_uri: window.location.origin }),
+        // popup 모드일 때 백엔드가 postmessage로 자동 처리하도록 redirect_uri 제거
+        body: JSON.stringify({ action: 'exchange', code: resp.code }),
       })
-      if (!r.ok) return
+      if (!r.ok) {
+        const err = await r.json().catch(() => null)
+        console.error('Google Token Exchange Failed:', r.status, err)
+        alert('구글 연결 실패: ' + r.status + ' 에러. (콘솔을 확인하세요)')
+        return
+      }
       const d = (await r.json()) as { access_token: string; expires_in: number; refresh_token: string | null }
       saveAuth({
         token: d.access_token,
@@ -174,7 +179,10 @@ function handleCodeResponse(resp: { code?: string; error?: string }) {
         refreshToken: d.refresh_token ?? auth?.refreshToken ?? null,
       })
       connectSuccessHandler?.()
-    } catch { /* ignore */ }
+    } catch (err) {
+      console.error('Google Token Fetch Catch:', err)
+      alert('네트워크 에러: ' + String(err))
+    }
   })()
 }
 
