@@ -1,5 +1,5 @@
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
-import { Inbox, Sun, CalendarClock, CalendarRange, CalendarDays, Plus, Pencil, Trash2, Settings, Moon, SunMedium, LayoutGrid, HelpCircle, X, Folder, FolderPlus, FolderMinus, Archive, ArchiveRestore, ChevronDown, ChevronRight } from 'lucide-react'
+import { Inbox, Sun, CalendarClock, CalendarRange, CalendarDays, Plus, Pencil, Trash2, Settings, Moon, SunMedium, LayoutGrid, HelpCircle, X, Folder, FolderPlus, FolderMinus, Archive, ArchiveRestore, ChevronDown, ChevronRight, ChevronUp } from 'lucide-react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useStore, selInbox, selToday, selOverdue, selDated, selWeek } from '../store/store'
 import { wsColor, type Workspace, type Folder as FolderT } from '../types'
@@ -19,11 +19,23 @@ function ProjectNavRow({ ws, workspaces, folders }: { ws: Workspace; workspaces:
   const updateWorkspace = useStore(s => s.updateWorkspace)
   const deleteWorkspace = useStore(s => s.deleteWorkspace)
   const addFolder = useStore(s => s.addFolder)
+  const moveWorkspace = useStore(s => s.moveWorkspace)
   const navigate = useNavigate()
   const location = useLocation()
   const { setNodeRef, attributes, listeners, isDragging } = useDraggable({ id: ws.id })
+
+  const siblings = workspaces
+    .filter(x => x.folder_id === ws.folder_id && x.archived === ws.archived)
+    .sort((a, b) => a.position - b.position)
+  const idx = siblings.findIndex(x => x.id === ws.id)
+  const isFirst = idx === 0
+  const isLast = idx === siblings.length - 1
+
   const { onContextMenu, menu } = useContextMenu(close => (
     <>
+      {!isFirst && <MenuItem icon={ChevronUp} label="위로 이동" onClose={close} onPick={() => moveWorkspace(ws.id, -1)} />}
+      {!isLast && <MenuItem icon={ChevronDown} label="아래로 이동" onClose={close} onPick={() => moveWorkspace(ws.id, 1)} />}
+      {(!isFirst || !isLast) && <Divider />}
       <MenuItem icon={Pencil} label="이름 변경" onClose={close} onPick={async () => {
         const n = await promptDialog({ title: '프로젝트 이름 변경', defaultValue: ws.name, confirmLabel: '변경' })
         if (n?.trim()) updateWorkspace(ws.id, { name: n.trim() })
@@ -201,8 +213,9 @@ function SidebarContent({ dark, onToggleTheme, onClose }: { dark: boolean; onTog
   const navigate = useNavigate()
 
   // 활성(비아카이브) 프로젝트를 폴더별로 분류 + 아카이브
-  const active = workspaces.filter(w => !w.archived)
-  const archived = workspaces.filter(w => w.archived)
+  const sortedWorkspaces = [...workspaces].sort((a, b) => a.position - b.position)
+  const active = sortedWorkspaces.filter(w => !w.archived)
+  const archived = sortedWorkspaces.filter(w => w.archived)
   const sortedFolders = [...folders].sort((a, b) => a.position - b.position)
   const folderIds = new Set(folders.map(f => f.id))
   const ungrouped = active.filter(w => !w.folder_id || !folderIds.has(w.folder_id))

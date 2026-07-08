@@ -75,6 +75,8 @@ interface Store {
   addWorkspace: (name: string) => string
   updateWorkspace: (id: string, patch: Partial<Workspace>) => void
   deleteWorkspace: (id: string) => void
+  moveWorkspace: (id: string, dir: -1 | 1) => void
+
 
   /* folders (프로젝트 그룹) */
   addFolder: (name: string) => string
@@ -246,6 +248,25 @@ export const useStore = create<Store>((set, get) => ({
     }))
     enqueue({ table: 'workspaces', kind: 'delete', rowId: id })
   },
+  moveWorkspace: (id, dir) => {
+    const ws = get().workspaces.find(x => x.id === id)
+    if (!ws) return
+    const siblings = get().workspaces
+      .filter(x => x.folder_id === ws.folder_id && x.archived === ws.archived)
+      .sort((a, b) => a.position - b.position)
+    const idx = siblings.findIndex(x => x.id === id)
+    const other = siblings[idx + dir]
+    if (!other) return
+    const cur = siblings[idx]
+    set(s => ({
+      workspaces: s.workspaces.map(x =>
+        x.id === cur.id ? { ...x, position: other.position } : x.id === other.id ? { ...x, position: cur.position } : x,
+      ),
+    }))
+    enqueue({ table: 'workspaces', kind: 'update', rowId: cur.id, payload: { position: other.position } })
+    enqueue({ table: 'workspaces', kind: 'update', rowId: other.id, payload: { position: cur.position } })
+  },
+
 
   /* ───── folders (프로젝트 그룹) ───── */
   addFolder: name => {
